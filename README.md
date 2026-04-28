@@ -109,6 +109,7 @@ go run ./cmd/ggpu -w 800 -h 600 -debug-tiles -out work/tiles.png
 
 ### Live preview notes and troubleshooting
 
+- ![Live preview demo](docs/assets/live-preview.gif)
 - Demo video (short): [`docs/assets/live-preview-short.mp4`](docs/assets/live-preview-short.mp4)
 - Full capture: [`docs/assets/live-preview-small.mp4`](docs/assets/live-preview-small.mp4)
 - `-output live-web` keeps rendering until you press `Ctrl+C`.
