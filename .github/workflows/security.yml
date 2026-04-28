@@ -1,0 +1,68 @@
+# Supplemental security scans (govulncheck + Grype on a built image).
+# Main CI also runs govulncheck and Grype; this workflow tracks main/master like ci.yml.
+
+name: Security
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  govulncheck:
+    name: Go vulnerabilities
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  grype:
+    name: Grype (container image)
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: App version for Docker build-args
+        id: ver
+        run: |
+          echo "val=$(tr -d ' \n\r' < VERSION)" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$(echo "${GITHUB_SHA}" | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          push: false
+          tags: ggpu:scan
+          file: ./Dockerfile
+          build-args: |
+            APP_VERSION=${{ steps.ver.outputs.val }}
+            GIT_COMMIT=${{ steps.ver.outputs.short_sha }}
+            GIT_BRANCH=${{ github.ref_name }}
+
+      # Same idea as `make docker-scan` Grype fallback: official image + --pull=always.
+      - name: Run Grype on image
+        run: |
+          docker run --rm --pull=always \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            anchore/grype:latest \
+            ggpu:scan --fail-on high

@@ -1,0 +1,8 @@
+# Deny-all; only what the Go build needs (see Dockerfile)
+*
+!go.mod
+!go.sum
+!cmd/
+!cmd/**
+!pkg/
+!pkg/**

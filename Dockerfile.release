@@ -1,0 +1,16 @@
+# syntax=docker/dockerfile:1
+# Runtime image for GoReleaser dockers_v2: binaries are built by GoReleaser and laid out as
+# linux/<arch>/<binary> in the build context (see https://goreleaser.com/customization/package/dockers_v2/).
+# Local multi-stage compile: use Dockerfile (make docker-build / docker compose).
+ARG TARGETPLATFORM
+FROM gcr.io/distroless/static-debian12:nonroot
+ARG TARGETPLATFORM
+WORKDIR /work
+LABEL org.opencontainers.image.title="ggpu"
+LABEL org.opencontainers.image.description="Educational software rasterizer (ggpu) and matrix CLI (ggmat)"
+LABEL org.opencontainers.image.source="https://github.com/hrodrig/ggpu"
+LABEL org.opencontainers.image.authors="https://github.com/hrodrig/ggpu"
+COPY ${TARGETPLATFORM}/ggpu /usr/local/bin/ggpu
+COPY ${TARGETPLATFORM}/ggmat /usr/local/bin/ggmat
+ENTRYPOINT ["/usr/local/bin/ggpu"]
+CMD ["-out", "/work/demo.png", "-w", "800", "-h", "600"]

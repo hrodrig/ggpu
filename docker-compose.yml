@@ -1,0 +1,14 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  ggpu:
+    build: .
+    image: ggpu:local
+    logging: *default-logging
+    volumes:
+      # Container writes under /work (see Dockerfile WORKDIR + default -out)
+      - ./work:/work

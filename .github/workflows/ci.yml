@@ -1,0 +1,140 @@
+# [← Main README](../../README.md)
+# Split lint vs test/build/security; permissions; go-version-file; shallow checkout.
+name: CI
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  lint:
+    name: gofmt + go vet + gocyclo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Lint
+        run: make lint
+
+      - name: Cyclomatic complexity (gocyclo)
+        run: make gocyclo
+
+  go-linux-amd64:
+    name: "Linux (amd64) — test, coverage, build & security"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: App version
+        id: version
+        run: |
+          echo "val=$(tr -d ' \n\r' < VERSION)" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$(echo "${GITHUB_SHA}" | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      - name: Test (race detector)
+        run: go test -race -count=1 ./...
+
+      - name: Coverage (merged packages, min 80%)
+        run: |
+          go test -count=1 -covermode=atomic -coverpkg=./... -coverprofile=coverage.out ./...
+          go tool cover -func=coverage.out | tail -1
+          P=$(go tool cover -func=coverage.out | tail -1 | sed 's/^.*[[:space:]]\([0-9.]*\)%.*/\1/')
+          echo "merged statement coverage: ${P}% (minimum 80%)"
+          if [ "$(echo "$P < 80" | bc)" -eq 1 ]; then exit 1; fi
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.out
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Build ggpu + ggmat (native; ggpu with version metadata)
+        run: |
+          go build -ldflags "-s -w -X main.version=${{ steps.version.outputs.val }} -X main.commit=${{ steps.version.outputs.short_sha }} -X main.branch=${{ github.ref_name }}" -o /tmp/ggpu ./cmd/ggpu
+          /tmp/ggpu -version
+          go build -o /tmp/ggmat ./cmd/ggmat
+          test -x /tmp/ggmat
+
+      - name: Cross-compile ggpu + ggmat (linux/amd64, linux/arm64)
+        run: |
+          set -eux
+          V="${{ steps.version.outputs.val }}"
+          C="${{ steps.version.outputs.short_sha }}"
+          B="${{ github.ref_name }}"
+          LDFLAGS="-s -w -X main.version=${V} -X main.commit=${C} -X main.branch=${B}"
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o /tmp/ggpu-linux-amd64 ./cmd/ggpu
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o /tmp/ggpu-linux-arm64 ./cmd/ggpu
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /tmp/ggmat-linux-amd64 ./cmd/ggmat
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /tmp/ggmat-linux-arm64 ./cmd/ggmat
+          file /tmp/ggpu-linux-amd64
+          file /tmp/ggpu-linux-arm64
+          file /tmp/ggmat-linux-amd64
+          file /tmp/ggmat-linux-arm64
+
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image for Grype
+        run: |
+          docker build -t ggpu:ci -f Dockerfile \
+            --build-arg "APP_VERSION=${{ steps.version.outputs.val }}" \
+            --build-arg "GIT_COMMIT=${{ steps.version.outputs.short_sha }}" \
+            --build-arg "GIT_BRANCH=${{ github.ref_name }}" \
+            .
+
+      - name: Install Grype
+        run: |
+          set -eux
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+          grype version
+
+      - name: Grype (fail on High or Critical)
+        run: grype ggpu:ci --fail-on high
+
+  go-linux-arm64:
+    name: "Linux (arm64) — native test"
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Test (race)
+        run: go test -race -count=1 ./...
+
+      - name: Build ggpu + ggmat (native)
+        run: |
+          V=$(tr -d ' \n\r' < VERSION)
+          C=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          go build -ldflags "-s -w -X main.version=${V} -X main.commit=${C} -X main.branch=$GITHUB_REF_NAME" -o /tmp/ggpu ./cmd/ggpu
+          /tmp/ggpu -version
+          go build -o /tmp/ggmat ./cmd/ggmat
+          test -x /tmp/ggmat
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}

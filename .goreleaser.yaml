@@ -1,0 +1,114 @@
+version: 2
+
+project_name: ggpu
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: ggpu
+    main: ./cmd/ggpu
+    binary: ggpu
+    flags:
+      - -trimpath
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s
+      - -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.ShortCommit}}
+      - -X main.branch={{.Branch}}
+
+  - id: ggmat
+    main: ./cmd/ggmat
+    binary: ggmat
+    flags:
+      - -trimpath
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s
+      - -w
+
+archives:
+  - id: default
+    ids:
+      - ggpu
+      - ggmat
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: git
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - "^\\.github:"
+
+# Snapshot / test-release: next patch + -next (see https://goreleaser.com/customization/snapshots/).
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+# Docker: multi-arch via dockers_v2 + Dockerfile.release (pre-built binaries, COPY $TARGETPLATFORM/...).
+# sbom: false — GitHub-hosted runners often use docker buildx without attestation support;
+# otherwise: "Attestation is not supported for the docker driver".
+# No `annotations:` — buildx on GHA can error with: "index annotations not supported for single platform export".
+dockers_v2:
+  - dockerfile: Dockerfile.release
+    sbom: false
+    ids:
+      - ggpu
+      - ggmat
+    images:
+      - ghcr.io/hrodrig/ggpu
+    tags:
+      - "v{{ .Version }}"
+      - "{{ if not .IsSnapshot }}latest{{ end }}"
+    labels:
+      org.opencontainers.image.title: "ggpu"
+      org.opencontainers.image.description: "Educational software rasterizer (ggpu) and matrix CLI (ggmat)"
+      org.opencontainers.image.source: "https://github.com/hrodrig/ggpu"
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.created: "{{ .Date }}"
+
+release:
+  github:
+    owner: hrodrig
+    name: ggpu
+  prerelease: auto
+  header: |
+    ## ggpu {{ .Tag }}
