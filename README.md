@@ -9,7 +9,7 @@
 
 ## Summary
 
-**ggpu** is a **CPU-based**, **classroom-oriented** software rasterizer in **Go**: a deliberately small **graphics pipeline** (vertices → raster → fragments) with **Go functions** as shaders, optional **depth**, and **PNG** output. **`ggmat`** is a companion **CSV matrix** CLI for linear-algebra teaching (`add`, `mul-ew`, `matmul`, `identity`, `dot`). The repo doubles as a **template** for CI, coverage, container scanning, and reproducible builds.
+**ggpu** is a **CPU-based**, **classroom-oriented** software rasterizer in **Go**: a deliberately small **graphics pipeline** (vertices → raster → fragments) with **Go functions** as shaders, optional **depth**, and **PNG** or **live web preview** output. **`ggmat`** is a companion **CSV matrix** CLI for linear-algebra teaching (`add`, `mul-ew`, `matmul`, `identity`, `dot`). The repo doubles as a **template** for CI, coverage, container scanning, and reproducible builds.
 
 - **[Releases](https://github.com/hrodrig/ggpu/releases)** — versioned tags, notes, and artifacts (including container images on GHCR when published).
 - **Version source:** [`VERSION`](VERSION) (SemVer); **`ggpu -version`** prints git metadata when link-built ([`Makefile`](Makefile), [CI](.github/workflows/ci.yml)).
@@ -60,6 +60,7 @@ Docs and slides are **English** so you can adapt `docs/PRESENTATION.md` and `doc
 - Optional **depth buffer** (less-equal; smaller depth wins for the current mapping)
 - **Rasterization modes:** by default, each 16×16 screen tile is processed in a **separate goroutine**; optional **sequential** per-tile loop on one goroutine (`Config.SequentialTileRaster`); optional **debug tile** checkerboard on tile boundaries (`Config.DebugShowTileWorkload`) for teaching
 - **`image/png`** export for demos and assignments
+- Optional **live preview** (`-output live-web`) served on a local browser canvas
 
 ## Requirements
 
@@ -70,6 +71,7 @@ Docs and slides are **English** so you can adapt `docs/PRESENTATION.md` and `doc
 
 ```bash
 go run ./cmd/ggpu -w 800 -h 600 -t 0   # default PNG: work/demo.png
+go run ./cmd/ggpu -output live-web -listen 127.0.0.1:8080 -max-fps 30
 # Version info only matters on a link-built binary:
 make build && ./bin/ggpu -version
 ```
@@ -94,12 +96,25 @@ go run ./cmd/ggpu -w 800 -h 600 -debug-tiles -out work/tiles.png
 ### CLI flags (demo / `ggpu` binary)
 
 - `-version` — print version from `VERSION`, git **short** commit, and branch, then exit
+- `-output` — output mode: `png` (default) or `live-web`
 - `-w`, `-h` — framebuffer dimensions
 - `-out` — output PNG path (default **`work/demo.png`**; parent dir is created if missing)
+- `-listen` — listen address for `live-web` mode (default `127.0.0.1:8080`)
+- `-max-fps` — preview refresh target for `live-web` mode (default `30`)
+- `-open-browser` — open `live-web` URL in the default browser
 - `-t` — sets the `TimeSeconds` uniform (small tint in the demo fragment shader)
 - `-sequential-tiles` — one goroutine per draw for tile raster (`Config.SequentialTileRaster`)
 - `-debug-tiles` — show subtle color bias on 16×16 tile edges (teaching; `Config.DebugShowTileWorkload`)
 - `-stress` — draw many random triangles (rough performance smoke test)
+
+### Live preview notes and troubleshooting
+
+- Demo video (short): [`docs/assets/live-preview-short.mp4`](docs/assets/live-preview-short.mp4)
+- Full capture: [`docs/assets/live-preview-small.mp4`](docs/assets/live-preview-small.mp4)
+- `-output live-web` keeps rendering until you press `Ctrl+C`.
+- If `-listen` is already in use, change it (example: `-listen 127.0.0.1:8090`).
+- Use lower `-max-fps` values on constrained machines to reduce CPU load.
+- If the browser does not open automatically, omit `-open-browser` and open the printed URL manually.
 
 ### Tool: `ggmat` (dense matrix ops, teaching CLI)
 
@@ -266,8 +281,18 @@ make docker-buildx
 
 ```bash
 mkdir -p work
-docker compose up --build
+docker compose up --build ggpu-live
+# open http://127.0.0.1:8080 for live preview
+```
+
+```bash
+mkdir -p work
+docker compose run --rm ggpu-png
 # → work/demo.png (host ./work is mounted at container /work)
+```
+
+```bash
+docker compose down
 ```
 
 ## CI (summary)

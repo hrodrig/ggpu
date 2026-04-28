@@ -20,6 +20,18 @@ func TestRun_invalidDimensions(t *testing.T) {
 	}
 }
 
+func TestRun_invalidOutputMode(t *testing.T) {
+	if code := run([]string{"-output", "invalid-mode"}); code != 2 {
+		t.Fatalf("want exit 2, got %d", code)
+	}
+}
+
+func TestRun_invalidMaxFPS(t *testing.T) {
+	if code := run([]string{"-output", "live-web", "-max-fps", "0"}); code != 2 {
+		t.Fatalf("want exit 2, got %d", code)
+	}
+}
+
 func TestRun_stressPath(t *testing.T) {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "s.png")
