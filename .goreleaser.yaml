@@ -53,16 +53,24 @@ builds:
       - -s
       - -w
 
+# One archive per binary so releases list ggpu_* and ggmat_* explicitly (both still same OS/arch matrix).
 archives:
-  - id: default
+  - id: ggpu-dist
     ids:
       - ggpu
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "ggpu_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  - id: ggmat-dist
+    ids:
       - ggmat
     formats: [tar.gz]
     format_overrides:
       - goos: windows
         formats: [zip]
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "ggmat_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
   name_template: checksums.txt
