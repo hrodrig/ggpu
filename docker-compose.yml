@@ -5,10 +5,20 @@ x-logging: &default-logging
     max-file: "3"
 
 services:
-  ggpu:
+  ggpu-live:
     build: .
     image: ggpu:local
     logging: *default-logging
+    command: ["-output", "live-web", "-listen", "0.0.0.0:8080", "-max-fps", "30"]
+    ports:
+      - "8080:8080"
+    restart: "no"
+
+  ggpu-png:
+    image: ggpu:local
+    logging: *default-logging
+    command: ["-output", "png", "-w", "800", "-h", "600", "-out", "/work/demo.png"]
     volumes:
       # Container writes under /work (see Dockerfile WORKDIR + default -out)
       - ./work:/work
+    restart: "no"
